@@ -28,7 +28,7 @@ func TestNew(t *testing.T) {
 	if x == nil {
 		t.Errorf("expected obj")
 	}
-	checkNum(x.NumberOfReplicas, 20, t)
+	checkNum(x.numberOfReplicas, 20, t)
 }
 
 func TestAdd(t *testing.T) {
@@ -688,10 +688,10 @@ func TestCollisionsCRC(t *testing.T) {
 	count := 0
 	for scanner.Scan() {
 		word := scanner.Text()
-		for i := 0; i < c.NumberOfReplicas; i++ {
+		for i := 0; i < c.numberOfReplicas; i++ {
 			ekey := c.eltKey(word, i)
 			// ekey := word + "|" + strconv.Itoa(i)
-			k := c.hashKey(ekey)
+			k := hashKey(ekey)
 			exist, ok := found[k]
 			if ok {
 				t.Logf("found collision: %s, %s", ekey, exist)
@@ -739,4 +739,63 @@ func TestConcurrentGetSet(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestConsistent_Replicas(t *testing.T) {
+	c := New()
+	c.Add("cacheA")
+	c.Add("cacheB")
+	c.Add("cacheC")
+	users := []string{"user_mcnulty", "user_bunk", "user_omar", "user_bunny", "user_stringer"}
+	results := []string{"cacheA", "cacheA", "cacheA", "cacheC", "cacheC"}
+	for i := 0; i < len(users); i++ {
+		val, err := c.Get(users[i])
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		if val != results[i] {
+			t.Fatalf("invalid value %s, expected: %s", val, results[i])
+		}
+	}
+	c.Add("cacheD")
+	c.Add("cacheE")
+	results = []string{"cacheE", "cacheA", "cacheA", "cacheE", "cacheE"}
+
+	for i := 0; i < len(users); i++ {
+		val, err := c.Get(users[i])
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		if val != results[i] {
+			t.Fatalf("invalid value %s, expected: %s", val, results[i])
+		}
+	}
+
+	if err := c.Replicas(10); err != nil {
+		t.Fatal(err)
+	}
+	results = []string{"cacheE", "cacheD", "cacheD", "cacheE", "cacheE"}
+	for i := 0; i < len(users); i++ {
+		val, err := c.Get(users[i])
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		if val != results[i] {
+			t.Fatalf("invalid value %s, expected: %s", val, results[i])
+		}
+	}
+
+	if err := c.Replicas(20); err != nil {
+		t.Fatal(err)
+	}
+	results = []string{"cacheE", "cacheA", "cacheA", "cacheE", "cacheE"}
+	for i := 0; i < len(users); i++ {
+		val, err := c.Get(users[i])
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		if val != results[i] {
+			t.Fatalf("invalid value %s, expected: %s", val, results[i])
+		}
+	}
 }

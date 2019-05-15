@@ -41,23 +41,22 @@ func (x uints) Swap(i, j int) { x[i], x[j] = x[j], x[i] }
 
 // ErrEmptyCircle is the error returned when trying to get an element when nothing has been added to hash.
 var ErrEmptyCircle = errors.New("empty circle")
+var ErrInvalidReplicas = errors.New("invalid replicas")
 
 // Consistent holds the information about the members of the consistent hash circle.
 type Consistent struct {
 	circle           map[uint32]string
 	members          map[string]struct{}
 	sortedHashes     uints
-	NumberOfReplicas int
+	numberOfReplicas int
 	count            int64
 	sync.RWMutex
 }
 
 // New creates a new Consistent object with a default setting of 20 replicas for each entry.
-//
-// To change the number of replicas, set NumberOfReplicas before adding entries.
 func New() *Consistent {
 	c := new(Consistent)
-	c.NumberOfReplicas = 20
+	c.numberOfReplicas = 20
 	c.circle = make(map[uint32]string)
 	c.members = make(map[string]struct{})
 	return c
@@ -78,12 +77,55 @@ func (c *Consistent) Add(elt string) {
 
 // need c.Lock() before calling
 func (c *Consistent) add(elt string) {
-	for i := 0; i < c.NumberOfReplicas; i++ {
+	for i := 0; i < c.numberOfReplicas; i++ {
 		c.circle[c.hashKey(c.eltKey(elt, i))] = elt
 	}
 	c.members[elt] = struct{}{}
 	c.updateSortedHashes()
 	c.count++
+}
+
+// Replicas sets replicas number of consistent hash circle, and update related Consistent struct field
+func (c *Consistent) Replicas(replicas int) error {
+	if replicas <= 0 {
+		return ErrInvalidReplicas
+	}
+
+	c.Lock()
+	defer c.Unlock()
+
+	if replicas == c.numberOfReplicas {
+		return nil
+	}
+
+	// consistent hash circle is still empty
+	if len(c.members) == 0 {
+		c.numberOfReplicas = replicas
+		return nil
+	}
+
+	// remove overage hashes from circle
+	if replicas > c.numberOfReplicas {
+		for elt := range c.members {
+			for i := c.numberOfReplicas; i < replicas; i++ {
+				c.circle[c.hashKey(c.eltKey(elt, i))] = elt
+			}
+		}
+	}
+
+	// add new hashed into circle
+	if replicas < c.numberOfReplicas {
+		for elt := range c.members {
+			for i := replicas; i < c.numberOfReplicas; i++ {
+				delete(c.circle, c.hashKey(c.eltKey(elt, i)))
+			}
+		}
+	}
+
+	c.numberOfReplicas = replicas
+	c.updateSortedHashes()
+
+	return nil
 }
 
 // Remove removes an element from the hash.
@@ -95,7 +137,7 @@ func (c *Consistent) Remove(elt string) {
 
 // need c.Lock() before calling
 func (c *Consistent) remove(elt string) {
-	for i := 0; i < c.NumberOfReplicas; i++ {
+	for i := 0; i < c.numberOfReplicas; i++ {
 		delete(c.circle, c.hashKey(c.eltKey(elt, i)))
 	}
 	delete(c.members, elt)
@@ -103,7 +145,7 @@ func (c *Consistent) remove(elt string) {
 	c.count--
 }
 
-// Set sets all the elements in the hash.  If there are existing elements not
+// Set sets all the elements in the hash circle. If there are existing elements not
 // present in elts, they will be removed.
 func (c *Consistent) Set(elts []string) {
 	c.Lock()
@@ -129,12 +171,17 @@ func (c *Consistent) Set(elts []string) {
 	}
 }
 
+// Members returns all elements in the consistent hash circle
 func (c *Consistent) Members() []string {
 	c.RLock()
 	defer c.RUnlock()
-	var m []string
+
+	// pre-alloc all needed memory instead of 'm=append(m,k)' in for loop
+	var m = make([]string, len(c.members))
+	indexM := 0
 	for k := range c.members {
-		m = append(m, k)
+		m[indexM] = k
+		indexM++
 	}
 	return m
 }
@@ -235,6 +282,8 @@ func (c *Consistent) GetN(name string, n int) ([]string, error) {
 }
 
 func (c *Consistent) hashKey(key string) uint32 {
+	// optimization for short keys. []byte(key) will cause an expensive heap allocation and more work for GC
+	// see https://github.com/stathat/consistent/pull/4#commitcomment-5920103 for detail
 	if len(key) < 64 {
 		var scratch [64]byte
 		copy(scratch[:], key)
@@ -246,7 +295,7 @@ func (c *Consistent) hashKey(key string) uint32 {
 func (c *Consistent) updateSortedHashes() {
 	hashes := c.sortedHashes[:0]
 	//reallocate if we're holding on to too much (1/4th)
-	if cap(c.sortedHashes)/(c.NumberOfReplicas*4) > len(c.circle) {
+	if cap(c.sortedHashes)/(c.numberOfReplicas*4) > len(c.circle) {
 		hashes = nil
 	}
 	for k := range c.circle {
