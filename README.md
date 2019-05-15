@@ -6,25 +6,21 @@ Consistent hash package for Go.
 Installation
 ------------
 
-    go get stathat.com/c/consistent
+    go get github.com/liuhaoXD/consistent
 
 Examples
 --------
 
-Look at the [godoc](http://godoc.org/stathat.com/c/consistent).
+Look at the [godoc](http://godoc.org/github.com/liuhaoXD/consistent).
 
 Status
 ------
 
-This package was extracted from production code powering [StatHat](http://www.stathat.com),
-so clearly we feel that it is production-ready, but it should still be considered
-experimental as other uses of it could reveal issues we aren't experiencing.
+This package was cloned from [StatHat consistent](https://github.com/stathat/consistent),
+the original repo appears to lack maintenance, feedback to issues and PRs won't given in time,
+thus I reopen a another copy of 'consistent' under MIT license
 
-Contact us
-----------
-
-We'd love to hear from you if you are using `consistent`.
-Get in touch:  [@stathat](http://twitter.com/stathat) or [contact us here](http://www.stathat.com/docs/contact).
+ALl PRs and issues are welcome.
 
 About
 -----
