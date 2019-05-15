@@ -22,6 +22,7 @@ package consistent // import "github.com/liuhaoXD/consistent"
 
 import (
 	"errors"
+	"github.com/twmb/murmur3"
 	"hash/crc32"
 	"sort"
 	"strconv"
@@ -43,6 +44,11 @@ func (x uints) Swap(i, j int) { x[i], x[j] = x[j], x[i] }
 var ErrEmptyCircle = errors.New("empty circle")
 var ErrInvalidReplicas = errors.New("invalid replicas")
 
+const (
+	CRC32IEEE = iota
+	Murmur
+)
+
 // Consistent holds the information about the members of the consistent hash circle.
 type Consistent struct {
 	circle           map[uint32]string
@@ -50,12 +56,14 @@ type Consistent struct {
 	sortedHashes     uints
 	numberOfReplicas int
 	count            int64
+	hashAlgorithm    int
 	sync.RWMutex
 }
 
 // New creates a new Consistent object with a default setting of 20 replicas for each entry.
 func New() *Consistent {
 	c := new(Consistent)
+	c.hashAlgorithm = CRC32IEEE
 	c.numberOfReplicas = 20
 	c.circle = make(map[uint32]string)
 	c.members = make(map[string]struct{})
@@ -290,12 +298,23 @@ func (c *Consistent) GetN(name string, n int) ([]string, error) {
 func (c *Consistent) hashKey(key string) uint32 {
 	// optimization for short keys. []byte(key) will cause an expensive heap allocation and more work for GC
 	// see https://github.com/stathat/consistent/pull/4#commitcomment-5920103 for detail
+	var bytes []byte
 	if len(key) < 64 {
 		var scratch [64]byte
 		copy(scratch[:], key)
-		return crc32.ChecksumIEEE(scratch[:len(key)])
+		bytes = scratch[:len(key)]
+	} else {
+		bytes = []byte(key)
 	}
-	return crc32.ChecksumIEEE([]byte(key))
+
+	switch c.hashAlgorithm {
+	case CRC32IEEE:
+		return crc32.ChecksumIEEE(bytes)
+	case Murmur:
+		return murmur3.Sum32(bytes)
+	default:
+		return crc32.ChecksumIEEE(bytes)
+	}
 }
 
 func (c *Consistent) updateSortedHashes() {
