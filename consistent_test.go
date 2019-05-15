@@ -34,23 +34,40 @@ func TestNew(t *testing.T) {
 func TestAdd(t *testing.T) {
 	x := New()
 	x.Add("abcdefg")
+	origCount := x.count
+	x.Add("abcdefg")
+	if x.count != origCount {
+		t.Errorf("expected count %d, got %d", origCount, x.count)
+	}
 	checkNum(len(x.circle), 20, t)
 	checkNum(len(x.sortedHashes), 20, t)
 	if sort.IsSorted(x.sortedHashes) == false {
 		t.Errorf("expected sorted hashes to be sorted")
 	}
+
 	x.Add("qwer")
+	origCount = x.count
+	x.Add("qwer")
+	if x.count != origCount {
+		t.Errorf("expected count %d, got %d", origCount, x.count)
+	}
 	checkNum(len(x.circle), 40, t)
 	checkNum(len(x.sortedHashes), 40, t)
 	if sort.IsSorted(x.sortedHashes) == false {
 		t.Errorf("expected sorted hashes to be sorted")
 	}
+
 }
 
 func TestRemove(t *testing.T) {
 	x := New()
 	x.Add("abcdefg")
 	x.Remove("abcdefg")
+	origCount := x.count
+	x.Remove("abcdefg")
+	if x.count != origCount {
+		t.Errorf("expected count %d, got %d", origCount, x.count)
+	}
 	checkNum(len(x.circle), 0, t)
 	checkNum(len(x.sortedHashes), 0, t)
 }
@@ -691,7 +708,7 @@ func TestCollisionsCRC(t *testing.T) {
 		for i := 0; i < c.numberOfReplicas; i++ {
 			ekey := c.eltKey(word, i)
 			// ekey := word + "|" + strconv.Itoa(i)
-			k := hashKey(ekey)
+			k := c.hashKey(ekey)
 			exist, ok := found[k]
 			if ok {
 				t.Logf("found collision: %s, %s", ekey, exist)

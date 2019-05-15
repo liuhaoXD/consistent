@@ -77,6 +77,9 @@ func (c *Consistent) Add(elt string) {
 
 // need c.Lock() before calling
 func (c *Consistent) add(elt string) {
+	if _, exists := c.members[elt]; exists == true {
+		return
+	}
 	for i := 0; i < c.numberOfReplicas; i++ {
 		c.circle[c.hashKey(c.eltKey(elt, i))] = elt
 	}
@@ -137,6 +140,9 @@ func (c *Consistent) Remove(elt string) {
 
 // need c.Lock() before calling
 func (c *Consistent) remove(elt string) {
+	if _, exists := c.members[elt]; exists == false {
+		return
+	}
 	for i := 0; i < c.numberOfReplicas; i++ {
 		delete(c.circle, c.hashKey(c.eltKey(elt, i)))
 	}
